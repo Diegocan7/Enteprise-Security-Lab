@@ -36,6 +36,8 @@ Hardening controls were codified into reusable PowerShell scripts located under 
 
 Executed a programmatic verification block on `DC01` to confirm all defensive controls were actively enforced:
 
+![Phase 2 Defensive Controls Verification](../screenshots/phase2-hardening/verification-controls.png)
+
 ```powershell
 [PSCustomObject]@{
     "SMBv1 Disabled"       = -not (Get-SmbServerConfiguration).EnableSMB1Protocol
