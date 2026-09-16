@@ -44,7 +44,7 @@ The lab simulates an enterprise domain (`corp.me-lab.local`) deployed on isolate
 ```text
 ├── docs/               # Technical implementation write-ups and architecture diagrams
 │   └── phase1-active-directory.md
-├── hardening/          # Hardening-as-Code PowerShell automation
+├── scripts/          # Hardening-as-Code PowerShell automation
 │   ├── Disable-LegacyProtocols.ps1
 │   └── Enable-SecurityAuditing.ps1
 ├── telemetry/          # Sysmon configs, audit configurations, and rule mappings
