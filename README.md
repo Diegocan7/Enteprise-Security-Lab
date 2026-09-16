@@ -1,43 +1,51 @@
-# IT-Helpdesk-Support-Home-Lab
-A self-hosted lab simulating the IT operations of a small company built as a hands-on portfolio project
+# Enterprise Active Directory Security & Hardening Lab
+A defensive security engineering lab simulating enterprise infrastructure, attack-surface reduction via PowerShell automation, and detection telemetry.
 
 ## Why this exists
 
-Job descriptions for IT support roles typically ask for experience with employee onboarding/offboarding, SaaS account provisioning, asset & MDM management, security compliance (SOC 2 / ISO 27001), internal documentation, and process automation. Rather than just listing these as skills, this lab **builds and operates** a small simulated company IT environment to demonstrate them directly.
+Junior Security Engineering and SOC roles require practical familiarity with enterprise identity architecture, threat surface reduction, endpoint visibility, and defense-in-depth controls. Rather than conceptual knowledge, this lab demonstrates the end-to-end engineering lifecycle: **standing up core Active Directory infrastructure, enforcing security baselines through automated code, instrumenting deep endpoint telemetry, and validating defenses against simulated adversary techniques.**
 
-## The scenario
+## The Architecture & Threat Model
 
-A fictional 15–20 person company (`corp.me-lab.local`). I act as the sole IT person: standing up the infrastructure, then running it day to day — resolving tickets, provisioning/deprovisioning accounts, auditing device compliance, and documenting everything as I go.
+The lab simulates an enterprise domain (`corp.me-lab.local`) deployed on isolated virtual infrastructure. Active Directory serves as the primary identity provider and the target attack surface. The lab focuses on hardening against common initial compromise and lateral movement vectors (e.g., LLMNR spoofing, NBT-NS poisoning, Kerberoasting, and living-off-the-land command execution).
 
-## Tech stack
+## Tech Stack
 
-- **Hypervisor:** Hyper-V (Windows 11 Pro host)
-- **Directory services:** Windows Server 2022 — Active Directory Domain Services, DNS, Group Policy
-- **Ticketing:** osTicket / Zammad *(planned  (2) )*
-- **Asset management:** Snipe-IT *(planned  (3) )*
-- **MDM & compliance:** Fleet / Intune trial, CIS benchmarking *(planned (4) )*
-- **Automation:** Python (Google Workspace Admin SDK) *(planned (5) )*
-- **Documentation:** BookStack / this repo *(planned (6) )*
+- **Hypervisor & Networking:** Hyper-V (Isolated internal switch, NAT routing gateway)
+- **Identity & Directory Services:** Windows Server 2022 (AD DS, DNS, Group Policy)
+- **Automation & Hardening:** PowerShell (CIS-aligned system configuration, legacy protocol deprecation)
+- **Endpoint Visibility & Telemetry:** Microsoft Sysmon (SwiftOnSecurity baseline configuration), Windows Event Auditing
+- **SIEM & Centralized Logging:** Wazuh / Elastic (Planned)
+- **Adversary Emulation:** Atomic Red Team / MITRE ATT&CK validation (Planned)
 
-## Project phases
+## Project Roadmap
 
-| Phase | Focus | Status |
-|---|---|---|
-| 1 | Active Directory domain controller + client, OU structure, baseline GPO | Complete — [write-up](docs/phase1-active-directory.md) |
-| 2 | Helpdesk ticketing workflow | Planned |
-| 3 | Asset & license management (Snipe-IT) | Planned |
-| 4 | MDM & SOC 2 / ISO 27001 compliance mapping | Planned |
-| 5 | Onboarding/offboarding automation | Planned |
-| 6 | Internal documentation / knowledge base | Planned |
+| Phase | Focus | Status | Details |
+|---|---|---|---|
+| **Phase 1** | Enterprise AD Architecture & RBAC | Complete | Deployed DC01, Domain Services, DNS, structured OUs, and tiered GPO baseline |
+| **Phase 2** | Security Hardening via Automation | Complete | PowerShell automation disabling legacy protocols (SMBv1, LLMNR, NetBIOS) & enabling granular audit policies |
+| **Phase 3** | Deep Endpoint Telemetry (Sysmon) | In Progress | Instrumenting endpoints with Sysmon to capture process injection, hash verification, and network connections |
+| **Phase 4** | Centralized Logging & Detection Pipeline | Planned | Deploying Wazuh SIEM agent-manager architecture to ingest Event ID 4688 and Sysmon telemetry |
+| **Phase 5** | Adversary Emulation & Detection Validation | Planned | Executing MITRE ATT&CK techniques (Atomic Red Team) and validating SIEM alerts against telemetry |
 
-## Repo structure
+## Security Controls Implemented
 
-```
-docs/          Write-ups for each phase, in depth
-screenshots/   Supporting screenshots, organized by phase
-scripts/       Automation scripts (added from Phase 5 onward)
-```
+### 1. Protocol Remediation & Poisoning Mitigation
+- **SMBv1 Deprecation:** Disabled to eliminate legacy SMB exploits and pass-the-hash vectors.
+- **NBT-NS & LLMNR Elimination:** Enforced registry and adapter configurations disabling multicast resolution, neutralizing local network credential interception attacks (e.g., Responder).
 
-## About me
+### 2. Threat Detection Auditing
+- **Process Creation (Event ID 4688):** Instrumented granular tracking for every process execution.
+- **CLI Parameter Logging:** Enabled full command-line argument logging in process creation events to reveal hidden flags, script parameters, and living-off-the-land binaries (LOLBins).
+- **Kerberos & Credential Tracking:** Enabled auditing for Kerberos Ticket Granting Service (TGS/TGT) requests and logon events to establish telemetry for Kerberoasting and brute-force detection.
 
-Built by Diego Canodemaj, BSc Informatics & Telecommunications student at the National and Kapodistrian University of Athens.
+## Repo Structure
+
+```text
+├── docs/               # Technical implementation write-ups and architecture diagrams
+│   └── phase1-active-directory.md
+├── hardening/          # Hardening-as-Code PowerShell automation
+│   ├── Disable-LegacyProtocols.ps1
+│   └── Enable-SecurityAuditing.ps1
+├── telemetry/          # Sysmon configs, audit configurations, and rule mappings
+└── screenshots/        # Architecture diagrams, test execution logs, and event proofs
