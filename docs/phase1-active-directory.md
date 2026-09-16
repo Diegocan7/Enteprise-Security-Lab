@@ -1,57 +1,56 @@
-# Phase 1 — Active Directory Domain Controller & GPO Enforcement
+# Phase 1 — Enterprise AD Identity Architecture & Access Controls
 
 ## Goal
 
-Stand up a working Active Directory domain to represent the identity backbone of the simulated company, join a client workstation to it, and prove that centrally-managed policy actually reaches that workstation — not just that the domain exists.
+Deploy a secure, isolated Active Directory Domain Services (AD DS) environment to establish the centralized identity plane and primary attack surface for defensive hardening. Implement role-based access control (RBAC), enforce least-privilege boundary separations, and validate group policy delivery across endpoints.
 
-## Environment
+## Environment Architecture
 
-| VM | Role | OS | Specs |
-|---|---|---|---|
-| DC01 | Domain Controller | Windows Server 2022 Standard (Desktop Experience) | 4 GB RAM (dynamic), 60 GB VHDX |
-| CLIENT01 | Domain-joined workstation | Windows 11 Pro | 4 GB RAM (dynamic), 60 GB VHDX |
+| Node | Role | OS | Specs | Network Config |
+|---|---|---|---|---|
+| **DC01** | Primary Domain Controller & DNS | Windows Server 2022 Standard | 4 GB RAM (Dynamic), 60 GB VHDX | Static `192.168.50.10` / DNS `127.0.0.1` |
+| **CLIENT01** | Domain-Joined Workstation | Windows 11 Pro | 4 GB RAM (Dynamic), 60 GB VHDX | Static `192.168.50.20` / DNS `192.168.50.10` |
 
-- **Hypervisor:** Hyper-V, native (Windows 11 Pro host)
-- **Network:** Private virtual switch (`labnet`), fully isolated from the host network
-- **Domain:** `corp.me-lab.local`
-- **DC01 static IP:** 192.168.50.10 (also serves as DNS for the domain)
-- **CLIENT01 static IP:** 192.168.50.20 (DNS pointed at DC01)
+- **Hypervisor:** Hyper-V (Windows 11 Pro host)
+- **Virtual Network:** Internal Virtual Switch (`LabSwitch`) configured with NAT routing (`LabNAT`)
+- **Domain Forest FQDN:** `corp.me-lab.local`
 
-## What was built
+## Implementation Details
 
-### 1. Domain controller
-Promoted DC01 to a new forest/domain (`corp.me-lab.local`) via the standard AD DS role installation and `dcpromo` wizard, with DNS installed alongside it.
+### 1. Identity Infrastructure Deployment
+Promoted `DC01` as the root Domain Controller for forest `corp.me-lab.local`. Integrated Active Directory-Integrated DNS to manage zone resolution and Kerberos SRV records securely across the lab subnet.
 
-### 2. Organizational Unit structure
-Created a simple, realistic OU layout directly under the domain root:
+### 2. Tiered Organizational Unit (OU) Hierarchy
+Structured OUs directly under the domain root to enforce administrative boundaries and target policy deployment, avoiding object pollution in default containers:
 
-- `Employees` — standard staff accounts and workstations
-- `Contractors` — non-employee accounts
-- `IT` — IT staff accounts and IT-specific security groups
+- `Employees`: Standard user principals and unprivileged workstation objects.
+- `Contractors`: Restricted identity accounts subject to tight session boundaries.
+- `IT`: Administrative workstations, privileged user objects, and delegated operational security groups.
 
-![Active Directory OU and container structure](../screenshots/phase1-ad/ou-structure.webp)
+![Active Directory OU Structure](../screenshots/phase1-ad/ou-structure.webp)
 
-### 3. Users & groups
-- A personal IT admin user account (separate from the built-in `Administrator`, following the principle of not using a break-glass account for daily work)
-- A `Help Desk Security` security group, scoped to the IT OU, with the IT user added as a member — laying the groundwork for delegating specific permissions instead of granting full Domain Admin rights
+### 3. Least-Privilege & Delegated Administration
+To mitigate credential theft and pass-the-hash attacks, domain administration was structured around tiered access:
+- Created a dedicated administrative user principal for daily operations, deprecating the use of the default root `Administrator` account.
+- Implemented a scoped security group (`Help Desk Security`) in the `IT` OU to support delegated rights over user password resets and workstation management without granting global `Domain Admins` privileges.
 
-![Help Desk Security group membership](../screenshots/phase1-ad/help-desk-security-members.webp)
+![Help Desk Security Group Members](../screenshots/phase1-ad/help-desk-security-members.webp)
 
-### 4. Client join
-Built CLIENT01 as a Windows 11 Pro VM, gave it a static IP with DNS pointed at DC01, and joined it to `corp.me-lab.local` via Settings → Access work or school → Join a local Active Directory domain.
+### 4. Workstation Domain Join & Kerberos Validation
+Provisioned `CLIENT01` with static IP assignment pointing to `DC01` for secure SRV lookup. Enrolled the workstation into `corp.me-lab.local`, establishing a machine account password trust with the domain controller and enabling Kerberos mutual authentication.
 
-![CLIENT01 sign-in screen showing both the local account and the CORP\Administrator domain account](../screenshots/phase1-ad/signin-screen.webp)
+![CLIENT01 Domain Sign-in Screen](../screenshots/phase1-ad/signin-screen.webp)
 
-### 5. Baseline Group Policy
-Created `Baseline-Employee-Policy`, linked to the `Employees` OU, enforcing a computer-level interactive logon inactivity limit (5 minutes) — the kind of basic control that maps directly to access-control requirements in frameworks like SOC 2 (CC6.1) and ISO 27001 (A.9).
+### 5. Defensive Baseline Group Policy Delivery
+Authored and linked `Baseline-Employee-Policy` to the `Employees` OU. Enforced an interactive logon inactivity limit (5 minutes) to protect against unauthorized physical and console session hijacking, mapping directly to CIS Benchmarks and standard framework controls (SOC 2 CC6.1 / ISO 27001 A.9).
 
 ## Verification
 
-Ran `gpresult /r` on CLIENT01 after moving its computer object into the `Employees` OU (computer-level GPOs only apply to computer objects located inside the linked OU) and confirmed the policy was actually delivered:
+Moved `CLIENT01`'s computer object from the default `Computers` container into `OU=Employees,DC=corp,DC=me-lab,DC=local` and executed `gpresult /r` in an elevated terminal to verify GPO delivery:
 
-![gpresult output confirming Baseline-Employee-Policy applied to CLIENT01](../screenshots/phase1-ad/gpresult-verification.jpg)
+![gpresult Output Confirming Baseline Policy Applied](../screenshots/phase1-ad/gpresult-verification.jpg)
 
-```
+```text
 COMPUTER SETTINGS
 ------------------
     CN=CLIENT01,OU=Employees,DC=corp,DC=me-lab,DC=local
@@ -65,18 +64,15 @@ COMPUTER SETTINGS
         Baseline-Employee-Policy
         Default Domain Policy
 ```
+The output validates end-to-end policy propagation from the root domain controller down to the domain-joined client.
+Engineering Notes & Hardening Takeaways
 
-This confirms full end-to-end policy delivery: GPO authored on the DC → linked to the correct OU → computer object correctly placed → policy received and applied on the client.
+# Engineering Notes & Hardening Takeaways
 
-## Lessons learned / troubleshooting notes
+- Container vs. OU Policy Traversal: Computer-level GPOs linked to OUs will not evaluate against objects residing in the default CN=Computers container; machine objects must be explicitly migrated into an targeted OU structure.
 
-- **Windows 11 Pro is required for domain join** — Home edition doesn't support it.
-- **Hyper-V Gen 2 VMs need TPM 2.0 manually enabled** (Settings → Security → Enable Trusted Platform Module) before Windows 11 setup will proceed; the VM must be fully powered off (not just the console window closed) before this setting becomes editable.
-- **Windows 11 setup requires an internet connection by default** on a fresh install. On an isolated lab network, bypass this at the "Let's connect you to a network" screen with Shift+F10 → `oobe\bypassnro`, which restarts the setup step and unlocks an offline/local account path.
-- **Computer objects default to the `Computers` container**, not whichever OU you expect — a computer-level GPO linked to an OU will silently not apply (`gpresult` shows `N/A`) until the computer object is moved into that OU.
-- **The built-in `Domain Controllers` OU is reserved** for domain controller computer objects only — accidentally nesting other OUs or groups inside it (rather than at the domain root) is an easy early mistake, and moving objects back out may require disabling "Protect object from accidental deletion" first (View → Advanced Features must be on to access this).
+- Protected AD Objects: Default domain administrative groups and the built-in Domain Controllers container are protected against accidental deletion by default. Custom OUs must follow equivalent structural protections before administrative delegation occurs.
 
-## Next: Phase 2
- 
-With identity and policy enforcement working, the next phase adds a ticketing system to simulate real helpdesk request handling.
+- Client Provisioning Controls: Fresh Windows 11 client deployments on isolated subnets require offline provisioning workarounds (oobe\bypassnro) and virtual TPM 2.0 enablement before establishing domain trust.
+
 
